@@ -42,6 +42,7 @@ import android.view.WindowInsets;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.wearable.Asset;
 import com.google.android.gms.wearable.DataApi;
 import com.google.android.gms.wearable.DataEvent;
@@ -302,7 +303,8 @@ public class MyWatchFace extends CanvasWatchFaceService {
                     : mSDF.format(now);
             canvas.drawText(text, mXOffset, mYOffset, mTextPaint);
             if(high!=null){
-                canvas.drawBitmap(weatherBitmap, mXOffset, mYOffset + 60, iconPaint);
+                Bitmap tempWeatherBitmap = Bitmap.createScaledBitmap(weatherBitmap, 72, 72, false);
+                canvas.drawBitmap(tempWeatherBitmap, mXOffset, mYOffset + 16, iconPaint);
                 canvas.drawText("L: " + low.intValue() + " H: " + high.intValue(), mXOffset + 72, mYOffset + 60, mTextPaint);
             }
             else{
@@ -365,8 +367,7 @@ public class MyWatchFace extends CanvasWatchFaceService {
                         high = dataMap.getDouble("CURRENT_HIGH");
                         low = dataMap.getDouble("CURRENT_LOW");
                         Asset weatherAsset = dataMap.getAsset("weather-icon");
-                        Bitmap bitmap = loadBitmapFromAsset(weatherAsset);
-                        weatherBitmap = bitmap;
+                        loadBitmapFromAsset(weatherAsset);
                         Log.d("Watch","High: " + high + "Low: " + low);
                     }
                 } else if (event.getType() == DataEvent.TYPE_DELETED) {
@@ -377,26 +378,20 @@ public class MyWatchFace extends CanvasWatchFaceService {
 
         }
 
-        public Bitmap loadBitmapFromAsset(Asset asset) {
+        public void loadBitmapFromAsset(Asset asset) {
             if (asset == null) {
                 throw new IllegalArgumentException("Asset must be non-null");
             }
-            ConnectionResult result =
-                    mGoogleApiClient.blockingConnect(1, TimeUnit.MINUTES);
-            if (!result.isSuccess()) {
-                return null;
-            }
             // convert asset into a file descriptor and block until it's ready
-            InputStream assetInputStream = Wearable.DataApi.getFdForAsset(
-                    mGoogleApiClient, asset).await().getInputStream();
-            mGoogleApiClient.disconnect();
+            Wearable.DataApi.getFdForAsset(
+                    mGoogleApiClient, asset).setResultCallback(new ResultCallback<DataApi.GetFdForAssetResult>() {
+                @Override
+                public void onResult(@NonNull DataApi.GetFdForAssetResult getFdForAssetResult) {
+                    InputStream assetInputStream = getFdForAssetResult.getInputStream();
+                    weatherBitmap = BitmapFactory.decodeStream(assetInputStream);
+                }
+            });
 
-            if (assetInputStream == null) {
-                Log.w("Watch", "Requested an unknown Asset.");
-                return null;
-            }
-            // decode the stream into a bitmap
-            return BitmapFactory.decodeStream(assetInputStream);
         }
 
         @Override
